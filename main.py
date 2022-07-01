@@ -17,6 +17,15 @@ def breaker(num: int = 50, char: str = "*") -> None:
     print("\n" + num*char + "\n")
 
 
+def encode_image_to_base64(header: str = "image/jpeg", image: np.ndarray = None) -> str:
+    assert image is not None, "Image is None"
+    _, imageData = cv2.imencode(".jpeg", image)
+    imageData = base64.b64encode(imageData)
+    imageData = str(imageData).replace("b'", "").replace("'", "")
+    imageData = header + "," + imageData
+    return imageData
+
+
 def decode_image(imageData) -> np.ndarray:
     _, imageData = imageData.split(",")[0], imageData.split(",")[1]
     image = np.array(Image.open(io.BytesIO(base64.b64decode(imageData))))
@@ -24,8 +33,14 @@ def decode_image(imageData) -> np.ndarray:
     return image
 
 
-def show(image: np.ndarray) -> None:
-    Image.fromarray(image).show()
+def show(image: np.ndarray, cmap: str="gnuplot2", title: str=None) -> None:
+    plt.figure()
+    plt.imshow(cv2.cvtColor(src=image, code=cv2.COLOR_BGR2RGB), cmap=cmap)
+    plt.axis("off")
+    if title: plt.title(title)
+    figmanager = plt.get_current_fig_manager()
+    figmanager.window.state("zoomed")
+    plt.show()
 
 
 def draw_box(image: np.ndarray, x1: int, y1: int, x2: int, y2: int) -> None:
@@ -60,28 +75,33 @@ def main():
 
     if filename is not None:
         assert filename in os.listdir(READ_PATH), "File not found"
-        files = {'image': open(os.path.join(READ_PATH, filename), 'rb')}
-        image = cv2.cvtColor(src=cv2.imread(os.path.join(READ_PATH, filename)), code=cv2.COLOR_BGR2RGB)
+        image = cv2.imread(os.path.join(READ_PATH, filename))
+        
     
     if image_url is not None:
         response = requests.request("GET", image_url)
-        files = {'image': response.content}
         image = np.array(Image.open(io.BytesIO(response.content)))
+
+    payload = {
+        "imageData" : encode_image_to_base64(image=image)
+    }
     
-    mode = url.split("/")[-2]
+    mode = url.split("/")[-1]
+
+    response = requests.request("POST", url=url, json=payload)
+
     
     if re.match(r"^classify$", mode, re.IGNORECASE):
-        response = requests.request("POST", url=url, files=files)
+
         if response.status_code == 200:
             label = response.json()["label"]
 
             print(f"Label: {label}")
-            if display: show(image, title=f"Label: {label}")
+            if display: show(image, title=f"{label.title()}")
         else:
             print(f"Error {response.status_code} : {response.reason}")
     
     elif re.match(r"^detect$", mode, re.IGNORECASE):
-        response = requests.request("POST", url=url, files=files)
         if response.status_code == 200:
             label = response.json()["label"]
 
@@ -91,18 +111,17 @@ def main():
                                              int(response.json()["y1"]),
                                              int(response.json()["x2"]),
                                              int(response.json()["y2"]))
-                show(image)
+                show(image, title=f"{label.title()}")
         else:
             print(f"Error {response.status_code} : {response.reason}")
         
     elif re.match(r"^segment$", mode, re.IGNORECASE):
-        response = requests.request("POST", url=url, files=files)
         if response.status_code == 200:
             labels = response.json()["labels"]
 
             print(f"Labels: {labels}")
             if display: 
-                show(decode_image(response.json()["imageData"]))
+                show(decode_image(response.json()["imageData"]), title=f"{[label.title() for label in labels]}")
         else:
             print(f"Error {response.status_code} : {response.reason}")
     
