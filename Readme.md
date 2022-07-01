@@ -2,7 +2,6 @@
 
 <br>
 
-- Install python 3.9.x
 - Run `pip install virtualenv`
 - Run `make-env.bat`
 
