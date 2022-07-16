@@ -4,17 +4,32 @@ import io
 import sys
 import cv2
 import base64
+import platform
 import requests
 import numpy as np
 import matplotlib.pyplot as plt
 
 from PIL import Image
 
-READ_PATH = "Files"
+BASE_PATH: str   = os.path.dirname(os.path.abspath(__file__))
+INPUT_PATH: str  = os.path.join(BASE_PATH, 'input')
+OUTPUT_PATH: str = os.path.join(BASE_PATH, 'output')
+
+ID: int = 0
+CAM_WIDTH: int  = 640
+CAM_HEIGHT: int = 360 
+FPS: int = 30
 
 
 def breaker(num: int = 50, char: str = "*") -> None:
     print("\n" + num*char + "\n")
+
+
+def decode_image(imageData) -> np.ndarray:
+    _, imageData = imageData.split(",")[0], imageData.split(",")[1]
+    image = np.array(Image.open(io.BytesIO(base64.b64decode(imageData))))
+    image = cv2.cvtColor(src=image, code=cv2.COLOR_BGRA2RGB)
+    return image
 
 
 def encode_image_to_base64(header: str = "image/jpeg", image: np.ndarray = None) -> str:
@@ -26,14 +41,7 @@ def encode_image_to_base64(header: str = "image/jpeg", image: np.ndarray = None)
     return imageData
 
 
-def decode_image(imageData) -> np.ndarray:
-    _, imageData = imageData.split(",")[0], imageData.split(",")[1]
-    image = np.array(Image.open(io.BytesIO(base64.b64decode(imageData))))
-    image = cv2.cvtColor(src=image, code=cv2.COLOR_BGRA2RGB)
-    return image
-
-
-def show(image: np.ndarray, cmap: str="gnuplot2", title: str=None) -> None:
+def show_image(image: np.ndarray, cmap: str="gnuplot2", title: str=None) -> None:
     plt.figure()
     plt.imshow(cv2.cvtColor(src=image, code=cv2.COLOR_BGR2RGB), cmap=cmap)
     plt.axis("off")
@@ -43,92 +51,155 @@ def show(image: np.ndarray, cmap: str="gnuplot2", title: str=None) -> None:
     plt.show()
 
 
-def draw_box(image: np.ndarray, x1: int, y1: int, x2: int, y2: int) -> None:
-    cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-
 def main():
-    breaker()
+    args_1: tuple = ("--mode", "-m")
+    args_2: tuple = ("--model", "-mo")
+    args_3: tuple = ("--filename", "-f")
+    args_4: tuple = ("--downscale", "-ds")
+    args_5: tuple = ("--url", "-u")
 
-    args_1: tuple = ("--url", "-u")
-    args_2: tuple = ("--file", "-f")
-    args_3: tuple = ("--image-url", "-img-u")
-    args_4: tuple = ("--display", "-disp")
+    mode: str = "image"
+    model_type: str = "classify"
+    filename: str = "Test_1.jpg"
+    downscale: float = None
+    base_url: str = "http://localhost:10000"
+
+    if args_1[0] in sys.argv: mode = sys.argv[sys.argv.index(args_1[0]) + 1]
+    if args_1[1] in sys.argv: mode = sys.argv[sys.argv.index(args_1[1]) + 1]
     
-    url: str = None
-    filename: str = None
-    image_url: str = None
-    display: bool = False
+    if args_2[0] in sys.argv: model_type = sys.argv[sys.argv.index(args_2[0]) + 1]
+    if args_2[1] in sys.argv: model_type = sys.argv[sys.argv.index(args_2[1]) + 1]
 
-    if args_1[0] in sys.argv: url = sys.argv[sys.argv.index(args_1[0]) + 1]
-    if args_1[1] in sys.argv: url = sys.argv[sys.argv.index(args_1[1]) + 1]
+    if args_3[0] in sys.argv: filename = sys.argv[sys.argv.index(args_3[0]) + 1]
+    if args_3[1] in sys.argv: filename = sys.argv[sys.argv.index(args_3[1]) + 1]
 
-    if args_2[0] in sys.argv: filename = sys.argv[sys.argv.index(args_2[0]) + 1]
-    if args_2[1] in sys.argv: filename = sys.argv[sys.argv.index(args_2[1]) + 1]
+    if args_4[0] in sys.argv: downscale = float(sys.argv[sys.argv.index(args_4[0]) + 1])
+    if args_4[1] in sys.argv: downscale = float(sys.argv[sys.argv.index(args_4[1]) + 1])
 
-    if args_3[0] in sys.argv: image_url = sys.argv[sys.argv.index(args_3[0]) + 1]
-    if args_3[1] in sys.argv: image_url = sys.argv[sys.argv.index(args_3[1]) + 1]
+    if args_5[0] in sys.argv: base_url = sys.argv[sys.argv.index(args_5[0]) + 1]
+    if args_5[1] in sys.argv: base_url = sys.argv[sys.argv.index(args_5[1]) + 1]
 
-    if args_4[0] in sys.argv or args_4[1] in sys.argv: display = True
+    assert re.match(r"^classify$", model_type, re.IGNORECASE) or re.match(r"^detect$", model_type, re.IGNORECASE) or re.match(r"^segment$", model_type, re.IGNORECASE), "Model type is not valid"
 
-    assert url is not None, "No endpoint provided"
-
-    if filename is not None:
-        assert filename in os.listdir(READ_PATH), "File not found"
-        image = cv2.imread(os.path.join(READ_PATH, filename))
-        
-    
-    if image_url is not None:
-        response = requests.request("GET", image_url)
-        image = np.array(Image.open(io.BytesIO(response.content)))
-
-    payload = {
-        "imageData" : encode_image_to_base64(image=image)
-    }
-    
-    mode = url.split("/")[-1]
-
-    response = requests.request("POST", url=url, json=payload)
-
-    
-    if re.match(r"^classify$", mode, re.IGNORECASE):
+    if re.match(r"^image$", mode, re.IGNORECASE):
+        image = cv2.imread(os.path.join(INPUT_PATH, filename))
+        payload = {
+            "imageData": encode_image_to_base64(image=image),
+        }
+        response = requests.post(base_url + "/" + model_type, json=payload)
 
         if response.status_code == 200:
-            label = response.json()["label"]
+            if response.json()["statusCode"] == 200:
+                if re.match(r"^classify$", model_type, re.IGNORECASE): 
+                    breaker()
+                    print(response.json()["label"])
+                    breaker()
 
-            print(f"Label: {label}")
-            if display: show(image, title=f"{label.title()}")
-        else:
-            print(f"Error {response.status_code} : {response.reason}")
-    
-    elif re.match(r"^detect$", mode, re.IGNORECASE):
-        if response.status_code == 200:
-            label = response.json()["label"]
+                elif re.match(r"^detect$", model_type, re.IGNORECASE):  
+                    cv2.rectangle(image, (response.json()["box"][0], response.json()["box"][1]), (response.json()["box"][2], response.json()["box"][3]), (0, 255, 0), 2)
+                    show_image(image, title=f"{response.json()['label'].title()}")
 
-            print(f"Label: {label}")
-            if display: 
-                draw_box(image, int(response.json()["x1"]), 
-                                             int(response.json()["y1"]),
-                                             int(response.json()["x2"]),
-                                             int(response.json()["y2"]))
-                show(image, title=f"{label.title()}")
+                elif re.match(r"^segment$", model_type, re.IGNORECASE):  
+                    image = decode_image(response.json()["imageData"])
+                    show_image(image, title=f"{response.json()['labels']}")
+            else:
+                breaker()
+                print(response.json()["statusText"])
+                breaker()
         else:
             print(f"Error {response.status_code} : {response.reason}")
         
-    elif re.match(r"^segment$", mode, re.IGNORECASE):
-        if response.status_code == 200:
-            labels = response.json()["labels"]
-
-            print(f"Labels: {labels}")
-            if display: 
-                show(decode_image(response.json()["imageData"]), title=f"{[label.title() for label in labels]}")
-        else:
-            print(f"Error {response.status_code} : {response.reason}")
     
-    else:
-        print("Invalid Endpoint")
+    elif re.match(r"^video$", mode, re.IGNORECASE):
+        cap = cv2.VideoCapture(os.path.join(INPUT_PATH, filename))
 
-    breaker()
+        while True:
+            ret, frame = cap.read()
+            if ret:
+                if downscale:
+                    frame = cv2.resize(
+                        src=frame, 
+                        dsize=(int(frame.shape[1]/downscale), int(frame.shape[0]/downscale)), 
+                        interpolation=cv2.INTER_AREA
+                    )
+                frameData = encode_image_to_base64(image=frame)
+                payload = {
+                    "imageData" : frameData
+                }       
+                response = requests.post(base_url + "/" + model_type, json=payload)
+                if response.status_code == 200:
+                    if response.json()["statusCode"] == 200:
+                        if re.match(r"^classify$", model_type, re.IGNORECASE): 
+                            cv2.putText(frame, response.json()["label"], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    
+                        elif re.match(r"^detect$", model_type, re.IGNORECASE):
+                            cv2.rectangle(frame, (response.json()["box"][0], response.json()["box"][1]), (response.json()["box"][2], response.json()["box"][3]), (0, 255, 0), 2)
+                            cv2.putText(frame, response.json()["label"], (response.json()["box"][0]-10, response.json()["box"][1]-10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+                        elif re.match(r"^segment$", model_type, re.IGNORECASE):
+                            disp_frameData = response.json()["imageData"]
+                            frame = decode_image(disp_frameData)
+                    else:
+                        print(response.json()["statusText"])
+                        break
+                else:
+                    print(f"Error {response.status_code} : {response.reason}")
+                    break
+
+                cv2.imshow("Feed", frame)
+            else:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            
+            if cv2.waitKey(1) & 0xFF == ord('q'): 
+                break
+        
+        cap.release()
+        cv2.destroyAllWindows()
+
+    
+    elif re.match(r"^realtime$", mode, re.IGNORECASE):
+        if platform.system() != "Windows":
+            cap = cv2.VideoCapture(ID)
+        else:
+            cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
+        cap.set(cv2.CAP_PROP_FPS, FPS)
+
+        while True:
+            ret, frame = cap.read()
+            if not ret: break
+            frameData = encode_image_to_base64(image=frame)
+            payload = {
+                "imageData" : frameData
+            }       
+            response = requests.post(base_url + "/" + model_type, json=payload)
+            if response.status_code == 200:
+                if response.json()["statusCode"] == 200:
+                    if re.match(r"^classify$", model_type, re.IGNORECASE): 
+                        cv2.putText(frame, response.json()["label"], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                
+                    elif re.match(r"^detect$", model_type, re.IGNORECASE):
+                        cv2.rectangle(frame, (response.json()["box"][0], response.json()["box"][1]), (response.json()["box"][2], response.json()["box"][3]), (0, 255, 0), 2)
+                        cv2.putText(frame, response.json()["label"], (response.json()["box"][0]-10, response.json()["box"][1]-10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+                    elif re.match(r"^segment$", model_type, re.IGNORECASE):
+                        disp_frameData = response.json()["imageData"]
+                        frame = decode_image(disp_frameData)
+                else:
+                    print(response.json()["statusText"])
+                    break
+            else:
+                print(f"Error {response.status_code} : {response.reason}")
+                break
+            
+            cv2.imshow("Feed", frame)
+        
+            if cv2.waitKey(1) & 0xFF == ord('q'): 
+                break
+        
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
