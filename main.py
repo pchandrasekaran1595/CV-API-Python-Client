@@ -79,7 +79,10 @@ def main():
     if args_5[0] in sys.argv: base_url = sys.argv[sys.argv.index(args_5[0]) + 1]
     if args_5[1] in sys.argv: base_url = sys.argv[sys.argv.index(args_5[1]) + 1]
 
-    assert re.match(r"^classify$", model_type, re.IGNORECASE) or re.match(r"^detect$", model_type, re.IGNORECASE) or re.match(r"^segment$", model_type, re.IGNORECASE), "Model type is not valid"
+    assert re.match(r"^classify$", model_type, re.IGNORECASE) or \
+           re.match(r"^face$", model_type, re.IGNORECASE) or \
+           re.match(r"^detect$", model_type, re.IGNORECASE) or \
+           re.match(r"^segment$", model_type, re.IGNORECASE), "Model type is not valid"
 
     if re.match(r"^image$", mode, re.IGNORECASE):
         image = cv2.imread(os.path.join(INPUT_PATH, filename))
@@ -98,6 +101,11 @@ def main():
                 elif re.match(r"^detect$", model_type, re.IGNORECASE):  
                     cv2.rectangle(image, (response.json()["box"][0], response.json()["box"][1]), (response.json()["box"][2], response.json()["box"][3]), (0, 255, 0), 2)
                     show_image(image, title=f"{response.json()['label'].title()}")
+                
+                elif re.match(r"^face$", model_type, re.IGNORECASE):  
+                    for face_detection in response.json()["face_detections"]:
+                        cv2.rectangle(image, (face_detection[0], face_detection[1]), (face_detection[0]+face_detection[2], face_detection[1]+face_detection[3]), (0, 255, 0), 2)
+                    show_image(image, title=f"Detections")
 
                 elif re.match(r"^segment$", model_type, re.IGNORECASE):  
                     image = decode_image(response.json()["imageData"])
@@ -135,6 +143,10 @@ def main():
                         elif re.match(r"^detect$", model_type, re.IGNORECASE):
                             cv2.rectangle(frame, (response.json()["box"][0], response.json()["box"][1]), (response.json()["box"][2], response.json()["box"][3]), (0, 255, 0), 2)
                             cv2.putText(frame, response.json()["label"], (response.json()["box"][0]-10, response.json()["box"][1]-10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        
+                        elif re.match(r"^face$", model_type, re.IGNORECASE):  
+                            for face_detection in response.json()["face_detections"]:
+                                cv2.rectangle(frame, (face_detection[0], face_detection[1]), (face_detection[0]+face_detection[2], face_detection[1]+face_detection[3]), (0, 255, 0), 2)
 
                         elif re.match(r"^segment$", model_type, re.IGNORECASE):
                             disp_frameData = response.json()["imageData"]
@@ -184,6 +196,10 @@ def main():
                     elif re.match(r"^detect$", model_type, re.IGNORECASE):
                         cv2.rectangle(frame, (response.json()["box"][0], response.json()["box"][1]), (response.json()["box"][2], response.json()["box"][3]), (0, 255, 0), 2)
                         cv2.putText(frame, response.json()["label"], (response.json()["box"][0]-10, response.json()["box"][1]-10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    
+                    elif re.match(r"^face$", model_type, re.IGNORECASE):  
+                            for face_detection in response.json()["face_detections"]:
+                                cv2.rectangle(frame, (face_detection[0], face_detection[1]), (face_detection[0]+face_detection[2], face_detection[1]+face_detection[3]), (0, 255, 0), 2)
 
                     elif re.match(r"^segment$", model_type, re.IGNORECASE):
                         disp_frameData = response.json()["imageData"]
