@@ -140,8 +140,10 @@ def main():
                             disp_frameData = response.json()["imageData"]
                             frame = decode_image(disp_frameData)
                     else:
-                        print(response.json()["statusText"])
-                        break
+                        # print(response.json()["statusText"])
+                        # break
+                        cv2.putText(frame, response.json()["statusText"], 30, 30, cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
                 else:
                     print(f"Error {response.status_code} : {response.reason}")
                     break
@@ -187,8 +189,9 @@ def main():
                         disp_frameData = response.json()["imageData"]
                         frame = decode_image(disp_frameData)
                 else:
-                    print(response.json()["statusText"])
-                    break
+                    # print(response.json()["statusText"])
+                    # break
+                    cv2.putText(frame, response.json()["statusText"], (30,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             else:
                 print(f"Error {response.status_code} : {response.reason}")
                 break
